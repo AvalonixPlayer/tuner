@@ -35,7 +35,7 @@ class TunerApp extends StatelessWidget {
         }
 
         return MaterialApp(
-          title: 'Dynamic Color Demo',
+          title: 'AvalonixTuner',
           theme: ThemeData(
             colorScheme: lightColorScheme,
             useMaterial3: true,
