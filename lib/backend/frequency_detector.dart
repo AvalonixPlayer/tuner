@@ -6,7 +6,7 @@ class FrequencyDetector {
   static const double _minGuitarFreq = 50.0;
   static const double _maxGuitarFreq = 1400.0;
 
-  static const double _minSNRdB = 6.0;
+  static const double _minSNRdB = 1.0;
 
   static const double _minPeakProminence = 1.6;
 
@@ -15,7 +15,7 @@ class FrequencyDetector {
   static double? detectExactFrequency({
     required Uint8List rawPcmBytes,
     required int sampleRate,
-    double minAmplitudeThreshold = 0.025,
+    double minAmplitudeThreshold = 0.005,
   }) {
     final Int16List int16Samples = rawPcmBytes.buffer.asInt16List();
     if (int16Samples.isEmpty) return null;
