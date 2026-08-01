@@ -35,7 +35,7 @@ class FrequencyDetector {
     );
 
     final fft = FFT(fftSize);
-    final fftResult = fft.realFft(samples);
+    final fftResult = fft.realFft(windowedSamples);
 
     // убрать зеркалo
     final halfSpectrum = fftResult.discardConjugates();

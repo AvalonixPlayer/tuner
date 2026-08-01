@@ -1,22 +1,58 @@
 import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
+import '../backend/note_helper.dart';
+import '../backend/microphone_tuner.dart';
 
 class GuitarTuning {
   final String name;
-  final List<String> notes;
+  final List<NoteInfo> strings; 
 
-  const GuitarTuning(this.name, this.notes);
+  const GuitarTuning(this.name, this.strings);
+
+  List<String> get notes => strings.map((n) => n.fullNoteWithOctave).toList();
+
+  GuitarTuning withTuningFork(double tuningFork) {
+    return GuitarTuning(
+      name,
+      strings
+          .map((n) => NoteInfo.noteFromString(
+        n.fullNoteWithOctave,
+        tuningFork: tuningFork,
+      ))
+          .toList(),
+    );
+  }
+
+  static GuitarTuning _build(String name, List<String> noteStrings) {
+    return GuitarTuning(name, NoteInfo.parseNotes(noteStrings));
+  }
+
+  static final standard =
+  _build('Standard (E)', ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+  static final dropD = _build('Drop D', ['D2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+  static final dStandard =
+  _build('D Standard', ['D2', 'G2', 'C3', 'F3', 'A3', 'D4']);
+  static final dropC = _build('Drop C', ['C2', 'G2', 'C3', 'F3', 'A3', 'D4']);
+  static final openG = _build('Open G', ['D2', 'G2', 'D3', 'G3', 'B3', 'D4']);
+  static final openD =
+  _build('Open D', ['D2', 'A2', 'D3', 'F#3', 'A3', 'D4']);
+  static final halfStepDown = _build(
+    'Half Step Down',
+    ['Eb2', 'Ab2', 'Db3', 'Gb3', 'Bb3', 'Eb4'],
+  );
 }
 
-const List<GuitarTuning> kGuitarTunings = [
-  GuitarTuning('Standard (E)', ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']),
-  GuitarTuning('Drop D', ['D2', 'A2', 'D3', 'G3', 'B3', 'E4']),
-  GuitarTuning('D Standard', ['D2', 'G2', 'C3', 'F3', 'A3', 'D4']),
-  GuitarTuning('Drop C', ['C2', 'G2', 'C3', 'F3', 'A3', 'D4']),
-  GuitarTuning('Open G', ['D2', 'G2', 'D3', 'G3', 'B3', 'D4']),
-  GuitarTuning('Open D', ['D2', 'A2', 'D3', 'F#3', 'A3', 'D4']),
-  GuitarTuning('Half Step Down', ['Eb2', 'Ab2', 'Db3', 'Gb3', 'Bb3', 'Eb4']),
+final List<GuitarTuning> kGuitarTunings = [
+  GuitarTuning.standard,
+  GuitarTuning.dropD,
+  GuitarTuning.dStandard,
+  GuitarTuning.dropC,
+  GuitarTuning.openG,
+  GuitarTuning.openD,
+  GuitarTuning.halfStepDown,
 ];
 
 class Tuner extends StatefulWidget {
@@ -32,15 +68,18 @@ class _TunerState extends State<Tuner> with SingleTickerProviderStateMixin {
   GuitarTuning _selectedTuning = kGuitarTunings.first;
 
   bool _isListening = false;
-  Timer? _mockTimer;
-  double _cents = 0;
-  String _detectedNote = 'A4';
-  double _detectedFrequency = 440;
+  bool _permissionDenied = false;
+
+  late final MicrophoneTuner _micTuner;
+  StreamSubscription<NoteInfo?>? _noteSubscription;
+  NoteInfo? _detectedNoteInfo;
+
+  double get _cents => _detectedNoteInfo?.centsOffset ?? 0;
+  String get _detectedNote => _detectedNoteInfo?.fullNoteWithOctave ?? '--';
+  double get _detectedFrequency => _detectedNoteInfo?.actualFrequency ?? 0;
 
   late final AnimationController _needleController;
   late Animation<double> _needleAnim;
-
-  final math.Random _rand = math.Random();
 
   @override
   void initState() {
@@ -52,44 +91,76 @@ class _TunerState extends State<Tuner> with SingleTickerProviderStateMixin {
     _needleAnim = Tween<double>(begin: 0, end: 0).animate(
       CurvedAnimation(parent: _needleController, curve: Curves.easeOutCubic),
     );
+    _micTuner = MicrophoneTuner(tuningFork: _a4Reference.toDouble());
   }
 
   @override
   void dispose() {
-    _mockTimer?.cancel();
+    _noteSubscription?.cancel();
+    _micTuner.dispose();
     _needleController.dispose();
     super.dispose();
   }
 
-  void _toggleListening() {
-    setState(() => _isListening = !_isListening);
+  Future<void> _toggleListening() async {
     if (_isListening) {
-      _startMockListening();
-    } else {
-      _mockTimer?.cancel();
-      _animateNeedleTo(0);
-      setState(() {
-        _detectedNote = '--';
-        _detectedFrequency = 0;
-        _cents = 0;
+      await _stopListening();
+      return;
+    }
+
+    setState(() => _permissionDenied = false);
+
+    try {
+      _noteSubscription?.cancel();
+      _noteSubscription = _micTuner.noteStream.listen((note) {
+        if (!mounted) return;
+        setState(() => _detectedNoteInfo = note);
+        if (note != null) {
+          _animateNeedleTo(note.centsOffset);
+        }
       });
+
+      await _micTuner.start();
+      if (!mounted) return;
+      setState(() => _isListening = true);
+    } on MicrophonePermissionDenied {
+      await _noteSubscription?.cancel();
+      _noteSubscription = null;
+      if (!mounted) return;
+      setState(() {
+        _isListening = false;
+        _permissionDenied = true;
+      });
+      _showPermissionDeniedSnackBar();
+    } catch (_) {
+      await _noteSubscription?.cancel();
+      _noteSubscription = null;
+      if (!mounted) return;
+      setState(() => _isListening = false);
     }
   }
 
-  void _startMockListening() {
-    _mockTimer?.cancel();
-    _mockTimer = Timer.periodic(const Duration(milliseconds: 700), (_) {
-      // Имитация "плавания" частоты для теста анимации стрелки
-      final newCents = (_rand.nextDouble() * 60 - 30).clamp(-45.0, 45.0);
-      final freq = _a4Reference * math.pow(2, newCents / 1200);
-
-      setState(() {
-        _cents = newCents;
-        _detectedNote = 'A4';
-        _detectedFrequency = freq.toDouble();
-      });
-      _animateNeedleTo(newCents);
+  Future<void> _stopListening() async {
+    await _micTuner.stop();
+    await _noteSubscription?.cancel();
+    _noteSubscription = null;
+    _animateNeedleTo(0);
+    if (!mounted) return;
+    setState(() {
+      _isListening = false;
+      _detectedNoteInfo = null;
     });
+  }
+
+  void _showPermissionDeniedSnackBar() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Нужен доступ к микрофону, чтобы слышать звук струны. '
+              'Разрешите доступ в настройках устройства.',
+        ),
+      ),
+    );
   }
 
   void _animateNeedleTo(double cents) {
@@ -103,7 +174,8 @@ class _TunerState extends State<Tuner> with SingleTickerProviderStateMixin {
     _needleController.forward(from: 0);
   }
 
-  bool get _inTune => _cents.abs() <= 5 && _isListening;
+  bool get _inTune =>
+      _isListening && _detectedNoteInfo != null && _cents.abs() <= 5;
 
   void _openA4Picker() {
     final colors = Theme.of(context).colorScheme;
@@ -198,7 +270,13 @@ class _TunerState extends State<Tuner> with SingleTickerProviderStateMixin {
                           ),
                         ),
                         onPressed: () {
-                          setState(() => _a4Reference = tempValue);
+                          setState(() {
+                            _a4Reference = tempValue;
+                            _selectedTuning = _selectedTuning.withTuningFork(
+                              tempValue.toDouble(),
+                            );
+                          });
+                          _micTuner.updateTuningFork(tempValue.toDouble());
                           Navigator.pop(ctx);
                         },
                         child: const Text(
@@ -226,7 +304,7 @@ class _TunerState extends State<Tuner> with SingleTickerProviderStateMixin {
     showModalBottomSheet(
       context: context,
       backgroundColor: colors.surface,
-      isScrollControlled: true, // Позволяет шторке подстраиваться под размер экрана
+      isScrollControlled: true, 
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -259,7 +337,6 @@ class _TunerState extends State<Tuner> with SingleTickerProviderStateMixin {
                 ),
                 const SizedBox(height: 16),
 
-                // Заворачиваем список в Flexible + SingleChildScrollView для скролла
                 Flexible(
                   child: SingleChildScrollView(
                     child: Column(
@@ -415,21 +492,32 @@ class _TunerState extends State<Tuner> with SingleTickerProviderStateMixin {
               const SizedBox(height: 6),
               SizedBox(
                 height: 20,
-                child: _isListening
+                child: !_isListening
+                    ? const SizedBox.shrink()
+                    : _detectedNoteInfo == null
                     ? Text(
-                  _inTune ? 'In tune' : (_cents < 0 ? 'Too low' : 'Too high'),
+                  'Listening...',
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                )
+                    : Text(
+                  _inTune
+                      ? 'In tune'
+                      : (_cents < 0 ? 'Too low' : 'Too high'),
                   style: TextStyle(
                     color: _inTune ? colors.primary : colors.error,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
-                )
-                    : const SizedBox.shrink(),
+                ),
               ),
               const SizedBox(height: 24),
               _StartButton(
                 isListening: _isListening,
-                onTap: _toggleListening,
+                onTap: () => _toggleListening(),
               ),
               const SizedBox(height: 28),
             ],
@@ -613,7 +701,6 @@ class _GaugePainter extends CustomPainter {
     final rect = Rect.fromCircle(center: center, radius: radius);
     canvas.drawArc(rect, math.pi, math.pi, false, arcPaint);
 
-    // Маппинг углов для отрисовки засечек на дуге (-50, -25, 0, 25, 50 центов)
     final tickPaint = Paint()
       ..color = colors.onSurfaceVariant.withValues(alpha: 0.5)
       ..strokeWidth = 1.6;

@@ -76,4 +76,40 @@ class NoteInfo {
       note: Note.values[noteIndex],
     );
   }
+
+  static NoteInfo noteFromString(String noteString, {double tuningFork = 440.0}) {
+    final noteName = noteString.substring(0, noteString.length - 1);
+    final octave = int.parse(noteString.substring(noteString.length - 1));
+
+    Note note;
+    switch (noteName) {
+      case 'C': note = Note.c; break;
+      case 'C#': note = Note.cSharp; break;
+      case 'D': note = Note.d; break;
+      case 'D#': note = Note.dSharp; break;
+      case 'E': note = Note.e; break;
+      case 'F': note = Note.f; break;
+      case 'F#': note = Note.fSharp; break;
+      case 'G': note = Note.g; break;
+      case 'G#': note = Note.gSharp; break;
+      case 'A': note = Note.a; break;
+      case 'A#': note = Note.aSharp; break;
+      case 'B': note = Note.b; break;
+      default: note = Note.c;
+    }
+
+    final tempNoteInfo = NoteInfo(octave, actualFrequency: 440.0, tuningFork: tuningFork, note: note);
+    final frequency = tempNoteInfo.targetFrequency;
+
+    return NoteInfo(
+      octave,
+      actualFrequency: frequency,
+      tuningFork: tuningFork,
+      note: note,
+    );
+  }
+
+  static List<NoteInfo> parseNotes(List<String> noteStrings, {double tuningFork = 440.0}) {
+    return noteStrings.map((s) => noteFromString(s, tuningFork: tuningFork)).toList();
+  }
 }

@@ -24,7 +24,7 @@ environment:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/images/icon.png"
+  image_path: "icons/colored.png"
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
 # consider running `flutter pub upgrade --major-versions`. Alternatively,
@@ -41,6 +41,7 @@ dependencies:
   dynamic_color: ^1.8.1
   permission_handler: ^11.4.0
   fftea: ^1.5.0+1
+  record: ^6.2.1
 
 dev_dependencies:
   flutter_test:

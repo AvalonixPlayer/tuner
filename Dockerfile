@@ -8,8 +8,4 @@ RUN flutter pub get
 
 COPY . .
 
-RUN chmod +x android/gradlew
-
-RUN flutter build apk --release
-
-CMD ["cp", "build/app/outputs/flutter-apk/app-release.apk", "/output/app-release.apk"]OPY --from=build /app/build/app/outputs/flutter-apk/app-release.apk /app-release.apk
+CMD ["flutter", "build", "apk", "--release"]
