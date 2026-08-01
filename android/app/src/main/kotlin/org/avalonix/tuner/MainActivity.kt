@@ -1,4 +1,4 @@
-package com.example.tuner
+package org.avalonix.tuner
 
 import io.flutter.embedding.android.FlutterActivity
 
