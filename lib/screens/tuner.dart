@@ -280,13 +280,13 @@ class _TunerState extends State<Tuner> with SingleTickerProviderStateMixin {
                             ),
                             decoration: BoxDecoration(
                               color: selected
-                                  ? colors.primaryContainer.withOpacity(0.3)
+                                  ? colors.primaryContainer.withValues(alpha: 0.3)
                                   : Colors.transparent,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: selected
                                     ? colors.primary
-                                    : colors.outlineVariant.withOpacity(0.2),
+                                    : colors.outlineVariant.withValues(alpha: 0.2),
                               ),
                             ),
                             child: Row(
