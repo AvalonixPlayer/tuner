@@ -8,4 +8,4 @@ RUN flutter pub get
 
 COPY . .
 
-CMD ["flutter", "build", "apk", "--release"]
+CMD ["/bin/sh"] 

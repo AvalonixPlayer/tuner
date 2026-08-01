@@ -7,7 +7,7 @@ project(runner LANGUAGES CXX)
 set(BINARY_NAME "tuner")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "com.example.tuner")
+set(APPLICATION_ID "org.avalonix.tuner")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -53,6 +53,12 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # System-level dependencies.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
+
+pkg_check_modules(PIPEWIRE libpipewire-0.3)
+if(PIPEWIRE_FOUND)
+    target_link_libraries(${BINARY_NAME} PRIVATE ${PIPEWIRE_LIBRARIES})
+    target_include_directories(${BINARY_NAME} PRIVATE ${PIPEWIRE_INCLUDE_DIRS})
+endif()
 
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
