@@ -5,11 +5,12 @@ import 'package:fftea/fftea.dart';
 class FrequencyDetector {
   static const double _minGuitarFreq = 50.0;
   static const double _maxGuitarFreq = 1400.0;
-  static const double _minSNRdB = 12.0;
 
-  static const double _minPeakProminence = 2.5;
+  static const double _minSNRdB = 6.0;
 
-  static const double _overtoneThreshold = 0.35;
+  static const double _minPeakProminence = 1.6;
+
+  static const int _hpsHarmonics = 5;
 
   static double? detectExactFrequency({
     required Uint8List rawPcmBytes,
@@ -38,7 +39,7 @@ class FrequencyDetector {
     final windowCoeffs = Window.hanning(fftSize);
     final windowedSamples = List<double>.generate(
       fftSize,
-      (i) => samples[i] * windowCoeffs[i],
+          (i) => samples[i] * windowCoeffs[i],
     );
 
     final fft = FFT(fftSize);
@@ -59,18 +60,36 @@ class FrequencyDetector {
 
     if (lowBin >= highBin) return null;
 
+    final hpsRange = highBin;
+    final List<double> hps = List<double>.from(
+      magnitudes.sublist(0, min(hpsRange + 1, numBins)),
+    );
+
+    for (var harmonic = 2; harmonic <= _hpsHarmonics; harmonic++) {
+      for (var i = 0; i < hps.length; i++) {
+        final srcIndex = i * harmonic;
+        if (srcIndex < numBins) {
+          hps[i] *= magnitudes[srcIndex];
+        } else {
+          hps[i] = 0.0;
+        }
+      }
+    }
+
     var maxIndex = -1;
-    var maxMag = -1.0;
-    for (var i = lowBin; i <= highBin; i++) {
-      if (magnitudes[i] > maxMag) {
-        maxMag = magnitudes[i];
+    var maxHpsVal = -1.0;
+    for (var i = lowBin; i <= highBin && i < hps.length; i++) {
+      if (hps[i] > maxHpsVal) {
+        maxHpsVal = hps[i];
         maxIndex = i;
       }
     }
 
-    if (maxIndex <= lowBin || maxIndex >= highBin) {
+    if (maxIndex <= lowBin || maxIndex >= highBin || maxIndex <= 0) {
       return null;
     }
+
+    final peakMag = magnitudes[maxIndex];
 
     final neighborRange = 3;
     var neighborSum = 0.0;
@@ -83,12 +102,12 @@ class FrequencyDetector {
     }
     if (neighborCount > 0) {
       final neighborAvg = neighborSum / neighborCount;
-      if (maxMag / neighborAvg < _minPeakProminence) {
+      if (neighborAvg > 0 && peakMag / neighborAvg < _minPeakProminence) {
         return null;
       }
     }
 
-    final signalPower = maxMag * maxMag;
+    final signalPower = peakMag * peakMag;
     var noisePower = 0.0;
     var noiseCount = 0;
     for (var i = lowBin; i <= highBin; i++) {
@@ -99,47 +118,29 @@ class FrequencyDetector {
     }
     if (noiseCount > 0) {
       noisePower /= noiseCount;
-      final snr = 10 * log(signalPower / noisePower);
-      if (snr < _minSNRdB) {
-        return null;
-      }
-    }
-
-    var fundamentalIndex = maxIndex;
-
-    if (maxIndex > lowBin * 2) {
-      final halfIndex = maxIndex ~/ 2;
-      if (halfIndex >= lowBin && magnitudes[halfIndex] > maxMag * _overtoneThreshold) {
-        var halfNeighborSum = 0.0;
-        var halfNeighborCount = 0;
-        for (var i = halfIndex - 2; i <= halfIndex + 2; i++) {
-          if (i != halfIndex && i >= 0 && i < numBins) {
-            halfNeighborSum += magnitudes[i];
-            halfNeighborCount++;
-          }
-        }
-        if (halfNeighborCount > 0) {
-          final halfNeighborAvg = halfNeighborSum / halfNeighborCount;
-          if (magnitudes[halfIndex] / halfNeighborAvg > 1.8) {
-            fundamentalIndex = halfIndex;
-          }
+      if (noisePower > 0) {
+        final snr = 10 * log(signalPower / noisePower);
+        if (snr < _minSNRdB) {
+          return null;
         }
       }
     }
+
+    final fundamentalIndex = maxIndex;
 
     final alpha = magnitudes[fundamentalIndex - 1];
     final beta = magnitudes[fundamentalIndex];
     final gamma = magnitudes[fundamentalIndex + 1];
 
     final denominator = alpha - 2 * beta + gamma;
+    double frequency;
     if (denominator == 0) {
-      return fundamentalIndex * binResolution;
+      frequency = fundamentalIndex * binResolution;
+    } else {
+      final delta = 0.5 * (alpha - gamma) / denominator;
+      final exactBin = fundamentalIndex + delta;
+      frequency = exactBin * binResolution;
     }
-
-    final delta = 0.5 * (alpha - gamma) / denominator;
-    final exactBin = fundamentalIndex + delta;
-
-    final frequency = exactBin * binResolution;
 
     if (frequency < _minGuitarFreq || frequency > _maxGuitarFreq) {
       return null;
@@ -148,4 +149,3 @@ class FrequencyDetector {
     return frequency;
   }
 }
-

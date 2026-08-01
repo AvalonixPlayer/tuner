@@ -12,7 +12,7 @@ class MicrophoneTuner {
   MicrophoneTuner({
     double tuningFork = 440.0,
     int sampleRate = 48000,
-    double minAmplitudeThreshold = 0.025,
+    double minAmplitudeThreshold = 0.01,
     int targetSampleCount = 8192,
   })  : _tuningFork = tuningFork,
         _sampleRate = sampleRate,
@@ -28,7 +28,7 @@ class MicrophoneTuner {
 
   StreamSubscription<Uint8List>? _pcmSubscription;
   final StreamController<NoteInfo?> _noteController =
-      StreamController<NoteInfo?>.broadcast();
+  StreamController<NoteInfo?>.broadcast();
 
   bool _isListening = false;
   bool get isListening => _isListening;
@@ -143,4 +143,3 @@ class MicrophonePermissionDenied implements Exception {
   @override
   String toString() => 'Microphone can\'t be accessed.';
 }
-
