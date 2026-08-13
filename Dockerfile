@@ -8,4 +8,6 @@ RUN flutter pub get
 
 COPY . .
 
-CMD ["/bin/sh"] 
+COPY output/sdk /opt/android-sdk-linux
+
+CMD bash 

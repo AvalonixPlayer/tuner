@@ -1,15 +1,12 @@
 import 'dart:math';
 import 'note_helper.dart';
 
-/// Временной сглаживатель для стабилизации показаний тюнера.
-/// Использует медианный фильтр, проверку стабильности (CV) и
-/// гистерезис при смене ноты.
 class NoteSmoother {
   NoteSmoother({
     this.bufferSize = 7,
-    this.maxCv = 0.04,        // максимальный коэффициент вариации (4%)
-    this.confirmationCount = 3, // сколько раз подряд нужна новая нота
-    this.nullTolerance = 2,     // сколько null подряд допустимо
+    this.maxCv = 0.04,        
+    this.confirmationCount = 2, 
+    this.nullTolerance = 2,    
   });
 
   final int bufferSize;
@@ -23,7 +20,6 @@ class NoteSmoother {
   int _pendingCount = 0;
   int _nullCount = 0;
 
-  /// Сбросить состояние
   void reset() {
     _freqBuffer.clear();
     _lastStableNote = null;
@@ -32,7 +28,6 @@ class NoteSmoother {
     _nullCount = 0;
   }
 
-  /// Принять новое измерение и вернуть стабилизированную ноту (или null)
   NoteInfo? smooth(NoteInfo? detected) {
     if (detected == null || detected.actualFrequency <= 0) {
       _nullCount++;
@@ -51,16 +46,13 @@ class NoteSmoother {
       _freqBuffer.removeAt(0);
     }
 
-    // Нужно минимум 4 валидных измерения для стабильности
     if (_freqBuffer.length < 4) {
       return _lastStableNote;
     }
 
-    // Медианный фильтр: берём медиану частот
     final sorted = List<double>.from(_freqBuffer)..sort();
     final medianFreq = sorted[sorted.length ~/ 2];
 
-    // Проверка стабильности: коэффициент вариации
     final mean = _freqBuffer.reduce((a, b) => a + b) / _freqBuffer.length;
     final variance = _freqBuffer
         .map((f) => (f - mean) * (f - mean))
@@ -69,23 +61,19 @@ class NoteSmoother {
     final cv = sqrt(variance) / mean;
 
     if (cv > maxCv) {
-      // Слишком нестабильно — возвращаем последнюю стабильную
       return _lastStableNote;
     }
 
-    // Пересчитываем NoteInfo от медианной частоты
     final stableNote = NoteInfo.fromFrequency(medianFreq, tuningFork: detected.tuningFork);
     if (stableNote == null) {
       return _lastStableNote;
     }
 
-    // === ГИСТЕРЕЗИС НОТЫ ===
     if (_lastStableNote == null) {
       _lastStableNote = stableNote;
       return stableNote;
     }
 
-    // Если нота та же (с точностью до октавы) — сразу обновляем
     if (stableNote.note == _lastStableNote!.note &&
         stableNote.octave == _lastStableNote!.octave) {
       _lastStableNote = stableNote;
@@ -94,7 +82,6 @@ class NoteSmoother {
       return stableNote;
     }
 
-    // Новая нота — требуем подтверждения
     if (_pendingNote == stableNote.note) {
       _pendingCount++;
       if (_pendingCount >= confirmationCount) {

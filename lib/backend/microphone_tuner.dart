@@ -13,7 +13,7 @@ class MicrophoneTuner {
     double tuningFork = 440.0,
     int sampleRate = 48000,
     double minAmplitudeThreshold = 0.01,
-    int targetSampleCount = 8192,
+    int targetSampleCount = 2048,
   })  : _tuningFork = tuningFork,
         _sampleRate = sampleRate,
         _minAmplitudeThreshold = minAmplitudeThreshold,
